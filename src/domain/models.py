@@ -1,7 +1,11 @@
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel
+from datetime import datetime
+from src.tools.currency_converter import CurrencyConverter
 
+
+currency_converter = CurrencyConverter()
 
 class AssetKind(str, Enum):
     land = "land"
@@ -15,108 +19,61 @@ class AssetConfiguration(BaseModel):
     pass
 
 
-class AssetBase(BaseModel):
-    name: str
-    default: bool = True
+class Value(BaseModel):
+    amount: float
     currency: str
-    kind: AssetKind
-    industry_type: Optional[str]
-    kind_configuration: Optional[AssetConfiguration]
 
 
-class AssetCreate(AssetBase):
-    pass
-
-
-class Asset(AssetBase):
-    id: int
+class Asset(BaseModel):
+    id: Optional[int]
+    name: str
+    value: Value
+    foreign_values: List[Value]
+    tags: List[str] = []
+    kind: Optional[AssetKind] = None
+    notes: Optional[str] = None
+    industry_type: Optional[str] = None
+    kind_configuration: Optional[AssetConfiguration] = None
+    include_in_net_worth: Optional[bool] = False
 
 
 class AccountType(str, Enum):
     cash = "cash"
     asset = "asset"
+    tax = "tax"
 
 
-class AccountBase(BaseModel):
-    include_in_net_worth: bool = True
-    account_group: Optional[int]
+class Account(BaseModel):
+    id: Optional[int]
     name: str
-    type: AccountType
+    type: AccountType = AccountType.asset
     assets: List[Asset] = []
     initial_balance: float = 0
-    initial_date: Optional[str]
+    initial_date: datetime = datetime.now()
     currency: str
     icon_url: Optional[str]
-    extra_fields: Optional[dict]
+    tags: List[str] = []
+    notes: Optional[str] = None
+    tax_account: Optional[int] = None
 
-
-class AccountCreate(AccountBase):
-    pass
-
-
-class Account(AccountBase):
-    id: int
-
-
-class AccountGroupBase(BaseModel):
-    name: str
-    accounts: List[Account] = []
-
-
-class AccountGroupCreate(AccountGroupBase):
-    pass
-
-
-class AccountGroup(AccountGroupBase):
-    id: int
+    def get_current_balance(self) -> Value:
+        amount = self.initial_balance + sum(
+            [
+                currency_converter.convert(asset.value, self.currency)
+                for asset in self.assets
+            ]
+        )
+        return Value(amount=amount, currency=self.currency)
 
 
 class TransactionBase(BaseModel):
-    amount: float
-    date: str
-    origin_account_id: int
-    destiny_account_id: int
+    id: Optional[int]
+    name: Optional[str]
+    value: Value
+    foreign_values: Optional[List[Value]]
+    date: datetime
+    origin_account: Account
+    destiny_account: Optional[Account]
     description: Optional[str]
-    labels: Optional[List[str]]
-    categories: Optional[List[str]]
-
-
-class TransactionCreate(TransactionBase):
-    pass
-
-
-class Transaction(TransactionBase):
-    id: int
-
-
-class ExpenseBase(BaseModel):
-    name: str
-    currency: str
-    budget: float
-    withdraw_account_id: int
-
-
-class ExpenseCreate(ExpenseBase):
-    pass
-
-
-class Expense(ExpenseBase):
-    id: int
-
-
-class GoalBase(BaseModel):
-    name: str
-    initial_cost: float
-    initial_date: Optional[str]
-    due_date: Optional[str]
-    needed: Optional[bool] = True
-    remaining_months: Optional[int]
-    monthly_cost: Optional[float]
-
-
-class GoalCreate(GoalBase):
-    pass
-
-
-class Goal(GoalBase):
-    id: int
+    tags: Optional[List[str]]
+    category: Optional[str]
